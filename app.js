@@ -77,19 +77,34 @@ Règles :
 - Si le texte ne contient pas de recette, renvoie {"error": "Aucune recette trouvée dans ce texte."}.`;
 
 const PROVIDERS = {
-  gemini: { name: 'Google Gemini (gratuit)', model: 'gemini-2.5-flash', link: 'aistudio.google.com/apikey', ph: 'AIza…' },
+  gemini: { name: 'Google Gemini (gratuit)', model: 'gemini-3.8-flash', link: 'aistudio.google.com/apikey', ph: 'AIza…' },
   claude: { name: 'Claude (payant)', model: 'claude-sonnet-5-5', link: 'console.anthropic.com', ph: 'sk-ant-…' },
 };
+
+async function pickGeminiModel(apiKey, exclude) {
+  try {
+    const r = await fetch('https://generativelanguage.googleapis.com/v1beta/models?pageSize=200', { headers: { 'x-goog-api-key': apiKey } });
+    if (!r.ok) return null;
+    const list = (await r.json()).models || [];
+    const ver = n => (n.match(/gemini-(\d+(?:\.\d+)?)/) || [0, 0])[1] * 1;
+    const c = list
+      .filter(m => (m.supportedGenerationMethods || []).includes('generateContent'))
+      .map(m => m.name.replace('models/', ''))
+      .filter(n => /^gemini-[\d.]+-flash$/.test(n) && n !== exclude)
+      .sort((x, y) => ver(y) - ver(x));
+    return c[0] || null;
+  } catch { return null; }
+}
 
 async function askClaude(text, sourceUrl) {
   const { apiKey } = state.settings;
   const provider = state.settings.provider || 'gemini';
-  const model = state.settings.model || PROVIDERS[provider].model;
+  const model = state.settings.model || (provider === 'gemini' && state.settings.autoModel) || PROVIDERS[provider].model;
   if (!apiKey) throw new Error('Ajoutez d\'abord votre clé API dans les réglages (⚙︎).');
   const userMsg = (sourceUrl ? `Lien de la vidéo : ${sourceUrl}\n\n` : '') + `Texte de la vidéo :\n"""\n${text}\n"""`;
   let res;
   if (provider === 'gemini') {
-    res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`, {
+    const call = m => fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(m)}:generateContent`, {
       method: 'POST',
       headers: { 'content-type': 'application/json', 'x-goog-api-key': apiKey },
       body: JSON.stringify({
@@ -98,6 +113,12 @@ async function askClaude(text, sourceUrl) {
         generationConfig: { responseMimeType: 'application/json', temperature: 0.3 },
       }),
     });
+    res = await call(model);
+    // Modèle retiré ou inconnu : on cherche automatiquement un modèle Flash disponible.
+    if (res.status === 404 || res.status === 400) {
+      const alt = await pickGeminiModel(apiKey, model);
+      if (alt) { res = await call(alt); if (res.ok) { state.settings.autoModel = alt; persist(); } }
+    }
   } else {
     res = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
