@@ -275,6 +275,18 @@ function viewRecipe(id, tab = 'ing') {
   };
 }
 
+// ---------- Partage depuis une autre app (Android) ----------
+let prefill = null;
+(function readShare() {
+  const p = new URLSearchParams(location.search);
+  if (!p.has('text') && !p.has('url') && !p.has('title')) return;
+  const text = [p.get('title'), p.get('text')].filter(Boolean).join('\n');
+  const found = (p.get('url') || text).match(/https?:\/\/[^\s]+/);
+  const url = p.get('url') || (found ? found[0] : '');
+  prefill = { url, text: text.replace(url, '').trim() };
+  history.replaceState(null, '', location.pathname);
+})();
+
 // ---------- Vue : ajouter une recette ----------
 function viewAdd() {
   header('Nouvelle recette');
@@ -284,19 +296,41 @@ function viewAdd() {
     <input id="url" type="url" inputmode="url" placeholder="https://www.instagram.com/reel/…">
     <label>Légende / texte de la recette</label>
     <textarea id="txt" placeholder="Collez ici la description de la vidéo…"></textarea>
+    <button class="btn secondary" id="paste" type="button">📋 Coller depuis le presse-papiers</button>
+    <div class="hint hidden" id="warn"></div>
     <label>Ou importer la vidéo (son transcrit sur votre téléphone)</label>
     <input id="vid" type="file" accept="video/*,audio/*">
     <div class="progress hidden" id="prog"><div></div></div>
     <p class="muted hidden" id="status"></p>
     <button class="btn" id="go">✨ Créer la recette</button>`;
+  if (prefill) { $('#url').value = prefill.url; $('#txt').value = prefill.text; prefill = null; }
   const setStatus = (m, pct) => {
     $('#status').textContent = m; $('#status').classList.toggle('hidden', !m);
     $('#prog').classList.toggle('hidden', pct == null); if (pct != null) $('#prog > div').style.width = pct + '%';
   };
+  $('#paste').onclick = async () => {
+    try {
+      const t = (await navigator.clipboard.readText()).trim();
+      if (!t) return toast('Presse-papiers vide', true);
+      if (/^https?:\/\/\S+$/.test(t)) { $('#url').value = t; toast('Lien collé. Il faut aussi la légende ou la vidéo.'); }
+      else { $('#txt').value = t; toast('Texte collé ✓'); }
+    } catch { toast('Collez avec un appui long dans le champ.', true); }
+  };
   $('#go').onclick = async () => {
     const btn = $('#go'), url = $('#url').value.trim(), file = $('#vid').files[0];
     let text = $('#txt').value.trim();
-    if (!text && !file) return toast('Collez un texte ou importez une vidéo.', true);
+    if (!file && /^https?:\/\/\S+$/.test(text) && !$('#url').value.trim()) { $('#url').value = text; $('#txt').value = ''; text = ''; }
+    const link = $('#url').value.trim();
+    if (!text && !file) {
+      $('#warn').classList.remove('hidden');
+      $('#warn').innerHTML = `⚠️ <b>Un lien seul ne suffit pas.</b> Instagram et Facebook empêchent l'app de lire la vidéo depuis son adresse.<br><br>
+        <b>Faites l'un des deux :</b><br>1. Ouvrez la vidéo, <b>copiez la légende</b> (le texte sous la vidéo) et collez-la dans « Légende / texte ».<br>
+        2. Ou <b>enregistrez l'écran</b> pendant la lecture, puis importez la vidéo ci-dessus.` +
+        (/^https?:\/\//.test(link) ? `<br><br><a href="${esc(link)}" target="_blank" rel="noopener"><b>Ouvrir la vidéo ↗</b></a>` : '');
+      $('#warn').scrollIntoView({ behavior: 'smooth', block: 'center' });
+      return;
+    }
+    $('#warn').classList.add('hidden');
     btn.disabled = true;
     try {
       if (file) {
@@ -383,4 +417,5 @@ function viewSettings() {
 
 // ---------- Démarrage ----------
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
-if (!state.settings.apiKey) { viewSettings(); toast('Commencez par ajouter votre clé API gratuite'); } else setTab('recipes');
+if (prefill) currentTab = 'add';
+if (!state.settings.apiKey) { viewSettings(); toast('Commencez par ajouter votre clé API gratuite'); } else setTab(prefill ? 'add' : 'recipes');
