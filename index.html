@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#e8590c">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="Recettes">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="apple-touch-icon" href="icon-180.png">
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="style.css">
+  <title>Mes Recettes</title>
+</head>
+<body>
+  <header class="topbar">
+    <button id="btn-back" class="icon-btn hidden" aria-label="Retour">‹</button>
+    <h1 id="title">Mes recettes</h1>
+    <button id="btn-settings" class="icon-btn" aria-label="Réglages">⚙︎</button>
+  </header>
+
+  <main id="view"></main>
+
+  <nav class="tabbar">
+    <button data-tab="recipes" class="active">📖<span>Recettes</span></button>
+    <button data-tab="add">➕<span>Ajouter</span></button>
+    <button data-tab="shopping">🛒<span>Courses</span></button>
+  </nav>
+
+  <div id="toast" class="toast hidden"></div>
+
+  <script src="app.js" type="module"></script>
+</body>
+</html>
